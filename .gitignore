@@ -1,0 +1,8 @@
+node_modules/
+logs/
+.DS_Store
+*.log
+.env*
+
+# Vite/Vitest caches generated while running browser tests.
+node_modules/.vite/

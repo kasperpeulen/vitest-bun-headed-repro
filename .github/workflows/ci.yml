@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  browser-matrix:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: ${{ matrix.allow_failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bun-runtime-chromium-headless
+            command: bun --bun vitest run --config vitest.playwright.chromium.config.ts --browser.headless --reporter=verbose
+            browsers: chromium
+            allow_failure: false
+
+          - name: bun-runtime-chromium-headed-xvfb
+            command: xvfb-run -a bun --bun vitest run --config vitest.playwright.chromium.config.ts --reporter=verbose
+            browsers: chromium
+            allow_failure: true
+
+          - name: node-runtime-chromium-headed-xvfb
+            command: xvfb-run -a bun vitest run --config vitest.playwright.chromium.config.ts --reporter=verbose
+            browsers: chromium
+            allow_failure: false
+
+          - name: bun-runtime-firefox-headed-xvfb
+            command: xvfb-run -a bun --bun vitest run --config vitest.playwright.firefox.config.ts --reporter=verbose
+            browsers: firefox
+            allow_failure: false
+
+          - name: bun-runtime-webkit-headed-xvfb
+            command: xvfb-run -a bun --bun vitest run --config vitest.playwright.webkit.config.ts --reporter=verbose
+            browsers: webkit
+            allow_failure: false
+
+          - name: bun-runtime-preview-xvfb
+            command: xvfb-run -a bun --bun vitest run --config vitest.preview.config.ts --reporter=verbose
+            browsers: chromium
+            allow_failure: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Linux browser dependencies
+        run: bun --bun playwright install --with-deps ${{ matrix.browsers }}
+
+      - name: Print versions
+        run: |
+          bun --revision
+          node --version
+          bun vitest --version
+          bun pm ls --depth 0
+
+      - name: Run browser test
+        run: ${{ matrix.command }}
