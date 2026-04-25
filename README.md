@@ -5,7 +5,7 @@ Minimal reproduction for a Vitest Browser Mode issue where headed Chromium fails
 ## Environment Used Locally
 
 - macOS Darwin 24.6.0 arm64
-- Bun `1.3.12+700fc117a`
+- Bun `1.3.13+bf2e2cecf`
 - Node `v24.14.1`
 - Vitest `4.1.5`
 - `@vitest/browser-playwright` `4.1.5`
@@ -50,6 +50,9 @@ bun --bun vitest run --config vitest.playwright.chromium.config.ts --browser.hea
 # Node runtime via Bun + Chromium headed: passes locally
 bun vitest run --config vitest.playwright.chromium.config.ts
 
+# Bun runtime + Chromium headed with Browser UI disabled: passes locally
+bun --bun vitest run --config vitest.playwright.chromium-ui-false.config.ts
+
 # Direct Node + Chromium headed: passes locally
 node node_modules/vitest/vitest.mjs run --config vitest.playwright.chromium.config.ts
 
@@ -68,7 +71,8 @@ bun --bun vitest run --config vitest.preview.config.ts
 | Runtime | Provider | Browser | Mode | Local result |
 | --- | --- | --- | --- | --- |
 | Bun (`--bun`) | Playwright | Chromium | headless | Pass |
-| Bun (`--bun`) | Playwright | Chromium | headed | Fail / no tests start |
+| Bun (`--bun`) | Playwright | Chromium | headed + Browser UI | Fail / no tests start |
+| Bun (`--bun`) | Playwright | Chromium | headed + `browser.ui: false` | Pass |
 | Bun (`--bun`) | Playwright | Firefox | headed | Pass |
 | Bun (`--bun`) | Playwright | WebKit | headed | Pass |
 | Node via `bun vitest` | Playwright | Chromium | headed | Pass |
@@ -82,11 +86,26 @@ The GitHub Actions workflow runs the core comparison on Ubuntu:
 
 - Bun runtime + Chromium headless.
 - Bun runtime + Chromium headed under `xvfb-run`.
+- Bun runtime + Chromium headed under `xvfb-run` with `browser.ui: false`.
 - Node runtime via `bun vitest` + Chromium headed under `xvfb-run`.
 - Bun runtime + Firefox/WebKit headed under `xvfb-run` for extra signal.
 - Bun runtime + preview provider under `xvfb-run`.
 
 The Bun-headed Chromium and Bun-preview jobs are marked `continue-on-error` so the workflow records the failure without hiding the passing controls.
+
+On Ubuntu CI, `bun-runtime-chromium-headed-xvfb` currently passes. The known failure is local macOS headed Chromium.
+
+## Current Narrowing
+
+Local debugging narrowed the macOS failure to Vitest's Browser UI JavaScript bundle:
+
+- `browser.ui: false` passes under `bun --bun` headed Chromium.
+- A static UI page containing `#tester-ui` passes.
+- The Browser UI CSS alone passes.
+- Adding `__vitest__/assets/index-BPQdrqGZ.js` back makes `bun --bun` headed Chromium fail.
+- Stubbing the UI app's own `__vitest_api__` WebSocket client makes the static UI + UI JS experiment pass again.
+
+The failing full run creates and loads the tester iframe, but the tester RPC WebSocket never reaches the server as an upgrade request. With `browser.ui: false`, the server logs `Browser API connected to tester` and the test passes.
 
 ## Upstream Links
 
@@ -96,4 +115,4 @@ Likely related:
 - https://github.com/oven-sh/bun/issues/10180
 - https://github.com/oven-sh/bun/issues/8222
 
-This repro is intended to support filing a Bun issue. The same Vitest config passes when the CLI runs on Node, and raw headed Playwright Chromium launch works under Bun, so the suspected boundary is Bun runtime plus Vitest Browser Mode headed Chromium orchestration/RPC.
+This repro is intended to support filing a Bun issue. The same Vitest config passes when the CLI runs on Node, and raw headed Playwright Chromium launch works under Bun, so the suspected boundary is Bun runtime plus Vitest Browser Mode's headed Browser UI JavaScript.
